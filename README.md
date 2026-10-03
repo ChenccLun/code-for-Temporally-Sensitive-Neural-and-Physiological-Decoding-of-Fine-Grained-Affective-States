@@ -76,8 +76,8 @@ displacement of the soft alignment (`Ω[i,j] = (i−j)²`). `CCCDILATELoss` comb
 `assets/MAHNOB_LOSO_1.pth` — the paper's network for held-out subject **P01** (LOSO fold 1,
 trained on the remaining subjects), re-exported at its best-validation epoch. On the
 complete held-out split it scores valence CCC **0.5618** / PCC 0.6444 and arousal CCC
-**0.3760** / PCC 0.4711, matching the paper's figures for this subject (valence CCC 0.5618,
-arousal CCC 0.3759).
+**0.3760** / PCC 0.4711 for this held-out subject. The paper reports the cohort-level mean
+over the 27 subjects, so this per-subject value is not printed there.
 
 Export note: the research script snapshotted its best epoch with
 `best_model_wts = model.state_dict()`, whose detached *views* share storage with the live
