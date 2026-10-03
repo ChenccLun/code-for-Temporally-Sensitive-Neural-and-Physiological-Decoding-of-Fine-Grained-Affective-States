@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+demo_output.png
+figure*.png
+fig_*.png

@@ -1,4 +1,4 @@
-"""Concordance (CCC) and DILATE objectives for the CCC-DILATE model.
+"""Concordance (CCC) and DILATE objectives for the paper's network.
 
 Two families of losses live here.
 
@@ -26,6 +26,9 @@ soft-DTW value with respect to the pairwise cost matrix.
 **CCC-DILATE.** :class:`CCCDILATELoss` is the paper's combined objective::
 
     L_CCC-DILATE = L_CCC + lambda * L_DILATE
+
+The paper's objective configuration is **alpha = 0.8** and **lambda = 0.001**,
+which are the defaults of :class:`DILATE` and :class:`CCCDILATELoss`.
 
 The soft-DTW dynamic programs are executed in NumPy float32 on the CPU, exactly
 as in the original implementation (which JIT-compiled the same code with numba);
@@ -407,12 +410,13 @@ class DILATE(nn.Module):
     """Batch-wise DILATE loss: ``alpha * shape + (1 - alpha) * temporal``.
 
     Args:
-        alpha: weight of the shape term versus the temporal term.
+        alpha: weight of the shape term versus the temporal term. The paper's
+            objective uses ``0.8``.
         gamma: soft-DTW smoothing temperature. Small values approach hard DTW.
         reduction: ``"mean"`` or ``"sum"`` over batch and channel.
     """
 
-    def __init__(self, alpha: float = 0.5, gamma: float = 0.01, reduction: str = "mean"):
+    def __init__(self, alpha: float = 0.8, gamma: float = 0.01, reduction: str = "mean"):
         super().__init__()
         if not 0 <= alpha <= 1:
             raise ValueError(f"alpha must be in [0, 1], got {alpha}")
@@ -474,19 +478,23 @@ class CCCDILATELoss(nn.Module):
     DILATE operates on ``[B, C, T]``, so the ``[B, T, C]`` predictions are
     transposed before the temporal term is evaluated.
 
+    The paper's objective configuration is ``ccc_weight = 1``, ``lambda =
+    dilate_weight = 0.001`` and ``dilate_alpha = 0.8``; these are the defaults
+    below.
+
     Args:
-        ccc_weight: weight of the concordance term (``1`` in the paper).
+        ccc_weight: weight of the concordance term.
         dilate_weight: ``lambda`` in the paper, the strength of the temporal-shape
             regulariser.
-        dilate_alpha: shape/temporal split inside DILATE (``0.5`` in the paper).
+        dilate_alpha: shape/temporal split inside DILATE.
         dilate_gamma: soft-DTW smoothing temperature.
     """
 
     def __init__(
         self,
         ccc_weight: float = 1.0,
-        dilate_weight: float = 1.0,
-        dilate_alpha: float = 0.5,
+        dilate_weight: float = 0.001,
+        dilate_alpha: float = 0.8,
         dilate_gamma: float = 0.01,
     ):
         super().__init__()

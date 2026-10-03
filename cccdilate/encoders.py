@@ -1,4 +1,4 @@
-"""Feature encoders shared by the CCC-DILATE network.
+"""Feature encoders shared by the paper's network.
 
 The three input modalities (EEG, GSR, eye tracking) are each encoded by the same
 two-stage stack:

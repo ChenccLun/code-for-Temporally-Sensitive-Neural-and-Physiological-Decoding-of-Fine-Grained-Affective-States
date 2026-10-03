@@ -1,19 +1,24 @@
 #!/usr/bin/env python
-"""End-to-end inference demo for the CCC-DILATE release.
+"""Reference inference demo for the paper's network.
+
+Temporally Sensitive Neural and Physiological Decoding of Fine-Grained Affective
+States Estimated by Continuous Facial Expressions.
 
 The demo loads the bundled checkpoint, rebuilds the model input from **raw**
 (un-normalised) held-out features using the shipped normalisation statistics,
-checks the reconstruction against a normalised checksum window, then runs a
-forward pass and reports CCC and Pearson correlation for valence and arousal
-against the bundled targets. The bundle holds the complete held-out P01 split, so
-those numbers are the checkpoint's held-out scores.
+checks the reconstruction against a normalised checksum window, runs a forward
+pass, reports CCC and Pearson correlation for valence and arousal against the
+bundled targets, and writes a prediction-versus-target figure. The bundle holds
+the complete held-out P01 split, so those numbers are the checkpoint's held-out
+scores.
 
 Usage
 -----
     python demo.py                # bundled P01 held-out sample
     python demo.py --synthetic    # random tensors of the same shape (no data assets)
 
-Both modes run in a few seconds on CPU.
+Both modes run in a few seconds on CPU. ``--synthetic`` writes no figure, since
+random labels carry no curve worth plotting.
 
 Normalisation
 -------------
@@ -39,6 +44,11 @@ DEFAULT_CHECKPOINT = REPO_ROOT / "assets" / "MAHNOB_LOSO_1.pth"
 DEFAULT_SAMPLE = REPO_ROOT / "assets" / "MAHNOB_LOSO_1_sample.npz"
 DEFAULT_NORM = REPO_ROOT / "assets" / "MAHNOB_norm.csv"
 
+PAPER_TITLE = (
+    "Temporally Sensitive Neural and Physiological Decoding of Fine-Grained\n"
+    "Affective States Estimated by Continuous Facial Expressions"
+)
+
 # Window geometry of the released model. A window holds 260 stored frames; the
 # first 60 output frames are discarded because they were produced from too little
 # left context (consecutive windows overlap by 30%), leaving 200 scored frames.
@@ -59,11 +69,15 @@ SYNTHETIC_WINDOWS = 4
 # by orders of magnitude more than this.
 NORMALISATION_TOLERANCE = 1e-4
 
+# Default Hann smoothing applied to the figure curves, in scored frames.
+DEFAULT_SMOOTHING = 301
+
 NORM_GROUPS = ("eeg", "label")
+DIMENSIONS = ("valence", "arousal")
 
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[2])
     parser.add_argument(
         "--checkpoint",
         type=Path,
@@ -84,6 +98,19 @@ def parse_args(argv=None):
         "(default: %(default)s)",
     )
     parser.add_argument(
+        "--out-fig",
+        type=Path,
+        default=Path("demo_output.png"),
+        help="where to write the prediction-versus-target figure (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--smooth",
+        type=int,
+        default=DEFAULT_SMOOTHING,
+        help="Hann-window length in frames for the figure curves; 1 disables "
+        "smoothing (default: %(default)s)",
+    )
+    parser.add_argument(
         "--synthetic",
         action="store_true",
         help="ignore the bundled assets and run on random tensors of the same shape",
@@ -91,6 +118,24 @@ def parse_args(argv=None):
     parser.add_argument("--device", default="cpu", help="torch device (default: %(default)s)")
     parser.add_argument("--seed", type=int, default=0, help="seed for --synthetic (default: %(default)s)")
     return parser.parse_args(argv)
+
+
+def smooth_curve(values: np.ndarray, window: int) -> np.ndarray:
+    """Hann-window moving average that does not droop at the ends.
+
+    The signal is edge-padded by ``window // 2`` samples on both sides and the
+    normalised kernel is applied with ``mode="valid"``, so every output sample is
+    a convex combination of real neighbours and the first and last values are
+    preserved rather than pulled toward zero.
+    """
+    if window <= 1:
+        return values
+    if window % 2 == 0:
+        window += 1  # keep the kernel symmetric about each sample
+    kernel = np.hanning(window)
+    kernel /= kernel.sum()
+    padded = np.pad(values, window // 2, mode="edge")
+    return np.convolve(padded, kernel, mode="valid")
 
 
 def load_norm(path: Path):
@@ -160,10 +205,7 @@ def load_sample(sample_path: Path):
     raw = torch.from_numpy(data["features_raw"]).float()
     checksum = torch.from_numpy(data["scaled_checksum"]).float()
     targets = torch.stack(
-        [
-            torch.from_numpy(data["valence"]).float(),
-            torch.from_numpy(data["arousal"]).float(),
-        ],
+        [torch.from_numpy(data[name]).float() for name in DIMENSIONS],
         dim=-1,
     )
     meta = {
@@ -184,6 +226,56 @@ def make_synthetic_sample(k: int = SYNTHETIC_WINDOWS, seed: int = 0):
     return raw, targets
 
 
+def save_figure(true: np.ndarray, pred: np.ndarray, path: Path, window: int) -> bool:
+    """Write the target-versus-prediction figure for both dimensions.
+
+    ``true`` and ``pred`` are ``[windows, scored frames, 2]``; each dimension is
+    flattened over the concatenated windows, so the x axis runs over the whole
+    held-out recording.
+
+    ``matplotlib`` is imported here rather than at module scope so that a missing
+    or unusable installation degrades to a warning: the scores are still reported
+    and the demo still exits successfully. Returns ``True`` if the figure was
+    written.
+    """
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except Exception as exc:  # environment-dependent, e.g. a broken libstdc++
+        print(f"figure      : skipped, matplotlib unavailable ({exc})")
+        return False
+
+    figure, axes = plt.subplots(1, 2, figsize=(15, 4.5))
+    steps = np.arange(true.shape[0] * true.shape[1])
+
+    for index, (name, axis) in enumerate(zip(DIMENSIONS, axes)):
+        y_true = true[..., index].ravel()
+        y_pred = pred[..., index].ravel()
+        axis.plot(steps, smooth_curve(y_true, window), color="#1f77b4",
+                  linewidth=1.4, label="target")
+        axis.plot(steps, smooth_curve(y_pred, window), color="#d62728",
+                  linewidth=1.4, label="prediction")
+        axis.set_title(
+            f"{name}  (CCC {ccc(y_true, y_pred):.4f}, PCC {pcc(y_true, y_pred):.4f})"
+        )
+        axis.set_xlabel("scored frame index (concatenated held-out windows)")
+        axis.set_ylabel("standardised value")
+        axis.legend(loc="upper right", frameon=False)
+        axis.grid(alpha=0.25)
+
+    figure.suptitle(
+        "Reference inference demo — held-out subject P01 "
+        f"(Hann smoothing, window = {window} frames)",
+        fontsize=10,
+    )
+    figure.tight_layout()
+    figure.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(figure)
+    return True
+
+
 def main(argv=None) -> int:
     args = parse_args(argv)
     device = torch.device(args.device)
@@ -193,9 +285,10 @@ def main(argv=None) -> int:
 
     model = load_model(args.checkpoint, device)
 
-    print("=" * 70)
-    print("CCC-DILATE inference demo")
-    print("=" * 70)
+    print("=" * 74)
+    print(PAPER_TITLE)
+    print("Reference inference demo")
+    print("=" * 74)
     print(f"checkpoint  : {args.checkpoint}")
     print(f"parameters  : {sum(p.numel() for p in model.parameters()):,}")
     print(f"device      : {device}")
@@ -258,17 +351,21 @@ def main(argv=None) -> int:
     print()
     print(f"{'dimension':<10}{'CCC':>10}{'PCC':>10}")
     print("-" * 30)
-    for index, name in enumerate(("valence", "arousal")):
+    for index, name in enumerate(DIMENSIONS):
         y_true = true[..., index].ravel()
         y_pred = pred[..., index].ravel()
         print(f"{name:<10}{ccc(y_true, y_pred):>10.4f}{pcc(y_true, y_pred):>10.4f}")
     print()
 
     if args.synthetic:
-        print("(labels are random: the correlations above are a smoke test only)")
+        print("(labels are random: the correlations above are a smoke test only;")
+        print(" no figure is written in --synthetic mode)")
     else:
         print(f"({true.shape[0]} windows = the complete held-out P01 split for this fold,")
         print(f" {true.shape[0] * true.shape[1]} scored frames; no subsetting)")
+        if save_figure(true, pred, args.out_fig, args.smooth):
+            print(f"figure      : {args.out_fig.resolve()}  "
+                  f"(Hann smoothing, window = {args.smooth} frames)")
 
     print(f"elapsed     : {time.perf_counter() - started:.2f} s")
     return 0

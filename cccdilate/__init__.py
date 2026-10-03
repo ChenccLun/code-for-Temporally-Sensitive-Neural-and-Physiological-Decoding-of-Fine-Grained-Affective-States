@@ -1,4 +1,9 @@
-"""CCC-DILATE: inference-only release of the tri-modal affect regression network.
+"""Reference implementation of the paper's core network and objective.
+
+Inference-only release of the tri-modal affect regression network from
+"Temporally Sensitive Neural and Physiological Decoding of Fine-Grained Affective
+States Estimated by Continuous Facial Expressions", together with the CCC, DILATE
+and CCC-DILATE objectives.
 
 Public API
 ----------

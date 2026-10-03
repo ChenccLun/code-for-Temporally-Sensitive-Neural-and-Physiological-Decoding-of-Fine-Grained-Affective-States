@@ -1,4 +1,4 @@
-"""The CCC-DILATE network: tri-modal encoders + gated cross-modal attention.
+"""The paper's network: tri-modal encoders + gated cross-modal attention.
 
 The released model corresponds to the ``EEGTransformer`` class of the original
 research code (``predict_tf_att_crossattn_pcag_loso_dsh.py``). Only the
@@ -6,7 +6,8 @@ research code (``predict_tf_att_crossattn_pcag_loso_dsh.py``). Only the
 used for every reported result; the unused ``forward_static`` branch and the
 unused ``ModulationModule`` have been removed. All attribute names that appear in
 the released checkpoint are preserved so that the weights load with
-``strict=True``.
+``strict=True``. The class keeps its historical name ``CCCDilateNet``; the
+CCC-DILATE objective it is named after lives in :mod:`cccdilate.losses`.
 """
 
 import math
