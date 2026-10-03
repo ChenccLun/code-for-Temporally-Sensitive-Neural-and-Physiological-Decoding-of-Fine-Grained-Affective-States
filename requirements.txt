@@ -1,0 +1,8 @@
+# Runtime requirements for the CCC-DILATE inference release.
+#
+# Only these two packages are imported anywhere in cccdilate/ and demo.py.
+# The original research pipeline additionally used pandas, scipy, scikit-learn,
+# mne-features, torcheeg, matplotlib, tqdm and numba for data preparation and
+# training; none of them is needed to run inference or the bundled demo.
+torch>=1.12
+numpy>=1.21
