@@ -1,9 +1,8 @@
 # Temporally Sensitive Neural and Physiological Decoding of Fine-Grained Affective States Estimated by Continuous Facial Expressions
 
 Core code for the paper: a reference implementation of its network and objective.
-**Inference-only** — no training loop, no data loaders, no experiment scaffolding: just
-the tri-modal (EEG, GSR, eye-tracking) regression network, the CCC, DILATE and CCC-DILATE
-objectives, and a runnable demo on a real held-out example.
+Including the cross-modal regression network, the CCC-DILATE objectives, and a runnable
+inference demo on a real held-out example from the MAHNOB-HCI dataset.
 
 ## Contents
 
@@ -60,8 +59,8 @@ four consecutive samples per channel are packed into one stored frame, channel-m
 `forward` unfolds it to `[B, S*4, C]`. For the released MAHNOB configuration `C = 100`:
 EEG 64 (32 electrodes plus 32 gamma envelopes), GSR 18 and eye 18 (both expanded to
 position, velocity and acceleration). The bundled example covers the MAHNOB-HCI data,
-whose synchronised streams are EEG, GSR and eye tracking, so the network has EEG, GSR and
-eye branches and no PPG or ECG branch.
+whose synchronised streams are EEG, GSR and eye tracking, and the network takes those
+three modalities as its input.
 
 ## Objective
 
@@ -113,6 +112,8 @@ Developed and evaluated on public affective-computing corpora (MAHNOB-HCI and ot
 in the paper), available from their providers under their own terms. The bundled example
 covers the MAHNOB-HCI data, whose synchronised streams are EEG, GSR and eye tracking; the
 clinical cohort cannot be shared (IRB restrictions), so it is not part of this release.
+The complete data-processing and training pipeline will be released with the final version
+of the paper.
 
 ## Licence
 
